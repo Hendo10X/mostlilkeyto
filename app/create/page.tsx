@@ -8,6 +8,8 @@ import { UserButton, useUser } from "@clerk/nextjs";
 import { BackButton } from "@/components/BackButton";
 import { BouncyButton } from "@/components/BouncyButton";
 
+import { useToast } from "@/components/ToastProvider";
+
 export default function CreatePoll() {
   const [question, setQuestion] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -16,6 +18,7 @@ export default function CreatePoll() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { user } = useUser();
+  const { addToast } = useToast();
 
   const suggestions = [
     "buy a lambo",
@@ -63,8 +66,14 @@ export default function CreatePoll() {
   const handleCreatePoll = async () => {
     if (!question || options.every(o => !o.trim())) return;
     setIsCreating(true);
-    const id = await createPollAction(question, options);
-    router.push(`/poll/${id}`);
+    try {
+      const id = await createPollAction(question, options);
+      router.push(`/poll/${id}`);
+    } catch (error) {
+      console.error("Failed to create poll:", error);
+      setIsCreating(false);
+      addToast("Failed to create poll. Please try again.", "error");
+    }
   };
 
   return (

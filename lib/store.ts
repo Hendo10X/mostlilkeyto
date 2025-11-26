@@ -15,6 +15,13 @@ export interface Poll {
   voters: string[];
 }
 
+// In-memory fallback for local development or if KV fails
+const globalStore = global as unknown as { polls: Record<string, Poll> };
+if (!globalStore.polls) {
+  globalStore.polls = {};
+}
+const polls = globalStore.polls;
+
 export const createPoll = async (question: string, options: string[]): Promise<string> => {
   const id = nanoid(10);
   const poll: Poll = {
@@ -25,18 +32,30 @@ export const createPoll = async (question: string, options: string[]): Promise<s
     voters: [],
   };
   
-  await kv.set(`poll:${id}`, poll);
+  try {
+    if (process.env.KV_URL) {
+      await kv.set(`poll:${id}`, poll);
+    } else {
+      polls[id] = poll;
+    }
+  } catch (error) {
+    console.error("Failed to save poll to KV, falling back to in-memory:", error);
+    polls[id] = poll;
+  }
+  
   return id;
 };
 
 export const getPoll = async (id: string): Promise<Poll | null> => {
   try {
-    const poll = await kv.get<Poll>(`poll:${id}`);
-    return poll;
+    if (process.env.KV_URL) {
+      const poll = await kv.get<Poll>(`poll:${id}`);
+      if (poll) return poll;
+    }
   } catch (error) {
-    console.error("Failed to fetch poll:", error);
-    return null;
+    console.error("Failed to fetch poll from KV:", error);
   }
+  return polls[id] || null;
 };
 
 export const votePoll = async (pollId: string, optionId: string, userId: string): Promise<boolean> => {
@@ -52,7 +71,16 @@ export const votePoll = async (pollId: string, optionId: string, userId: string)
         option.votes += 1;
         poll.voters.push(userId);
         
-        await kv.set(`poll:${pollId}`, poll);
+        try {
+          if (process.env.KV_URL) {
+            await kv.set(`poll:${pollId}`, poll);
+          } else {
+            polls[pollId] = poll;
+          }
+        } catch (error) {
+          console.error("Failed to update poll in KV:", error);
+          polls[pollId] = poll;
+        }
         return true;
       }
     }
@@ -64,5 +92,13 @@ export const votePoll = async (pollId: string, optionId: string, userId: string)
 };
 
 export const deletePoll = async (id: string): Promise<void> => {
-  await kv.del(`poll:${id}`);
+  try {
+    if (process.env.KV_URL) {
+      await kv.del(`poll:${id}`);
+    }
+    delete polls[id];
+  } catch (error) {
+    console.error("Failed to delete poll from KV:", error);
+    delete polls[id];
+  }
 };
