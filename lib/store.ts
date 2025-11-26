@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
 
 export interface PollOption {
   id: string;
@@ -22,6 +22,16 @@ if (!globalStore.polls) {
 }
 const polls = globalStore.polls;
 
+// Initialize Redis if env vars are present
+let redis: Redis | null = null;
+if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+  try {
+    redis = Redis.fromEnv();
+  } catch (e) {
+    console.error("Failed to initialize Redis client:", e);
+  }
+}
+
 export const createPoll = async (question: string, options: string[]): Promise<string> => {
   const id = nanoid(10);
   const poll: Poll = {
@@ -33,13 +43,15 @@ export const createPoll = async (question: string, options: string[]): Promise<s
   };
   
   try {
-    if (process.env.KV_URL) {
-      await kv.set(`poll:${id}`, poll);
+    if (redis) {
+      console.log(`[createPoll] Saving to Redis: ${id}`);
+      await redis.set(`poll:${id}`, poll);
     } else {
+      console.log(`[createPoll] Saving to in-memory: ${id}`);
       polls[id] = poll;
     }
   } catch (error) {
-    console.error("Failed to save poll to KV, falling back to in-memory:", error);
+    console.error("Failed to save poll to Redis, falling back to in-memory:", error);
     polls[id] = poll;
   }
   
@@ -47,15 +59,22 @@ export const createPoll = async (question: string, options: string[]): Promise<s
 };
 
 export const getPoll = async (id: string): Promise<Poll | null> => {
+  console.log(`[getPoll] Fetching: ${id}`);
   try {
-    if (process.env.KV_URL) {
-      const poll = await kv.get<Poll>(`poll:${id}`);
-      if (poll) return poll;
+    if (redis) {
+      const poll = await redis.get<Poll>(`poll:${id}`);
+      if (poll) {
+        console.log(`[getPoll] Found in Redis: ${id}`);
+        return poll;
+      }
     }
   } catch (error) {
-    console.error("Failed to fetch poll from KV:", error);
+    console.error("Failed to fetch poll from Redis:", error);
   }
-  return polls[id] || null;
+  
+  const memoryPoll = polls[id] || null;
+  console.log(`[getPoll] Found in memory: ${!!memoryPoll}`);
+  return memoryPoll;
 };
 
 export const votePoll = async (pollId: string, optionId: string, userId: string): Promise<boolean> => {
@@ -72,13 +91,13 @@ export const votePoll = async (pollId: string, optionId: string, userId: string)
         poll.voters.push(userId);
         
         try {
-          if (process.env.KV_URL) {
-            await kv.set(`poll:${pollId}`, poll);
+          if (redis) {
+            await redis.set(`poll:${pollId}`, poll);
           } else {
             polls[pollId] = poll;
           }
         } catch (error) {
-          console.error("Failed to update poll in KV:", error);
+          console.error("Failed to update poll in Redis:", error);
           polls[pollId] = poll;
         }
         return true;
@@ -93,12 +112,12 @@ export const votePoll = async (pollId: string, optionId: string, userId: string)
 
 export const deletePoll = async (id: string): Promise<void> => {
   try {
-    if (process.env.KV_URL) {
-      await kv.del(`poll:${id}`);
+    if (redis) {
+      await redis.del(`poll:${id}`);
     }
     delete polls[id];
   } catch (error) {
-    console.error("Failed to delete poll from KV:", error);
+    console.error("Failed to delete poll from Redis:", error);
     delete polls[id];
   }
 };
