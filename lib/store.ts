@@ -16,20 +16,32 @@ export interface Poll {
 }
 
 // In-memory fallback for local development or if KV fails
-const globalStore = global as unknown as { polls: Record<string, Poll> };
+const globalStore = global as unknown as { polls: Record<string, Poll>; redis?: Redis };
 if (!globalStore.polls) {
   globalStore.polls = {};
 }
 const polls = globalStore.polls;
 
-// Initialize Redis if env vars are present
-let redis: Redis | null = null;
-if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-  try {
-    redis = Redis.fromEnv();
-  } catch (e) {
-    console.error("Failed to initialize Redis client:", e);
+// Lazy Redis initialization - only create when first needed
+function getRedis(): Redis | null {
+  if (globalStore.redis) {
+    return globalStore.redis;
   }
+  
+  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
+    try {
+      console.log('[Redis] Initializing Redis client...');
+      globalStore.redis = Redis.fromEnv();
+      console.log('[Redis] Successfully initialized');
+      return globalStore.redis;
+    } catch (e) {
+      console.error("[Redis] Failed to initialize:", e);
+      return null;
+    }
+  }
+  
+  console.log('[Redis] Env vars not found, using in-memory storage');
+  return null;
 }
 
 export const createPoll = async (question: string, options: string[]): Promise<string> => {
@@ -41,6 +53,8 @@ export const createPoll = async (question: string, options: string[]): Promise<s
     createdAt: Date.now(),
     voters: [],
   };
+  
+  const redis = getRedis();
   
   try {
     if (redis) {
@@ -60,6 +74,8 @@ export const createPoll = async (question: string, options: string[]): Promise<s
 
 export const getPoll = async (id: string): Promise<Poll | null> => {
   console.log(`[getPoll] Fetching: ${id}`);
+  const redis = getRedis();
+  
   try {
     if (redis) {
       const poll = await redis.get<Poll>(`poll:${id}`);
@@ -90,6 +106,7 @@ export const votePoll = async (pollId: string, optionId: string, userId: string)
         option.votes += 1;
         poll.voters.push(userId);
         
+        const redis = getRedis();
         try {
           if (redis) {
             await redis.set(`poll:${pollId}`, poll);
@@ -111,6 +128,7 @@ export const votePoll = async (pollId: string, optionId: string, userId: string)
 };
 
 export const deletePoll = async (id: string): Promise<void> => {
+  const redis = getRedis();
   try {
     if (redis) {
       await redis.del(`poll:${id}`);
