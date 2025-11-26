@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { kv } from '@vercel/kv';
 
 export interface PollOption {
   id: string;
@@ -14,13 +15,6 @@ export interface Poll {
   voters: string[];
 }
 
-// In-memory store
-const globalStore = global as unknown as { polls: Record<string, Poll> };
-if (!globalStore.polls) {
-  globalStore.polls = {};
-}
-const polls = globalStore.polls;
-
 export const createPoll = async (question: string, options: string[]): Promise<string> => {
   const id = nanoid(10);
   const poll: Poll = {
@@ -30,30 +24,45 @@ export const createPoll = async (question: string, options: string[]): Promise<s
     createdAt: Date.now(),
     voters: [],
   };
-  polls[id] = poll;
+  
+  await kv.set(`poll:${id}`, poll);
   return id;
 };
 
 export const getPoll = async (id: string): Promise<Poll | null> => {
-  return polls[id] || null;
+  try {
+    const poll = await kv.get<Poll>(`poll:${id}`);
+    return poll;
+  } catch (error) {
+    console.error("Failed to fetch poll:", error);
+    return null;
+  }
 };
 
 export const votePoll = async (pollId: string, optionId: string, userId: string): Promise<boolean> => {
-  const poll = polls[pollId];
-  if (poll) {
-    if (poll.voters.includes(userId)) {
-      return false;
+  try {
+    const poll = await getPoll(pollId);
+    
+    if (poll) {
+      if (poll.voters.includes(userId)) {
+        return false;
+      }
+      const option = poll.options.find(o => o.id === optionId);
+      if (option) {
+        option.votes += 1;
+        poll.voters.push(userId);
+        
+        await kv.set(`poll:${pollId}`, poll);
+        return true;
+      }
     }
-    const option = poll.options.find(o => o.id === optionId);
-    if (option) {
-      option.votes += 1;
-      poll.voters.push(userId);
-      return true;
-    }
+    return false;
+  } catch (error) {
+    console.error("Failed to vote:", error);
+    return false;
   }
-  return false;
 };
 
 export const deletePoll = async (id: string): Promise<void> => {
-  delete polls[id];
+  await kv.del(`poll:${id}`);
 };
