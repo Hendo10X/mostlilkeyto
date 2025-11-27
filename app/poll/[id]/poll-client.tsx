@@ -8,6 +8,8 @@ import { Modal } from "@/components/Modal";
 import { useUser } from "@clerk/nextjs";
 import { BouncyButton } from "@/components/BouncyButton";
 
+import { useRouter } from "next/navigation";
+
 export default function PollClient({ poll }: { poll: Poll }) {
   const [currentPoll, setCurrentPoll] = useState(poll);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -17,6 +19,21 @@ export default function PollClient({ poll }: { poll: Poll }) {
   const totalVotes = currentPoll.options.reduce((acc, opt) => acc + opt.votes, 0);
   const toast = useToast();
   const { user } = useUser();
+  const router = useRouter();
+
+  // Sync state with props when router.refresh() fetches new data
+  useEffect(() => {
+    setCurrentPoll(poll);
+  }, [poll]);
+
+  // Poll for updates every 2 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 2000);
+    
+    return () => clearInterval(interval);
+  }, [router]);
 
   useEffect(() => {
     setShareUrl(window.location.href);
