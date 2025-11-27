@@ -28,19 +28,50 @@ function getRedis(): Redis | null {
     return globalStore.redis;
   }
   
+  // Check for Upstash Redis variables
   if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
     try {
-      console.log('[Redis] Initializing Redis client...');
+      console.log('[Redis] Initializing Redis client with UPSTASH_REDIS vars...');
       globalStore.redis = Redis.fromEnv();
       console.log('[Redis] Successfully initialized');
       return globalStore.redis;
     } catch (e) {
-      console.error("[Redis] Failed to initialize:", e);
-      return null;
+      console.error("[Redis] Failed to initialize with UPSTASH vars:", e);
+    }
+  }
+
+  // Check for Vercel KV variables (fallback)
+  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
+    try {
+      console.log('[Redis] Initializing Redis client with KV vars...');
+      globalStore.redis = new Redis({
+        url: process.env.KV_REST_API_URL,
+        token: process.env.KV_REST_API_TOKEN,
+      });
+      console.log('[Redis] Successfully initialized with KV vars');
+      return globalStore.redis;
+    } catch (e) {
+      console.error("[Redis] Failed to initialize with KV vars:", e);
+    }
+  }
+
+  // Check for DATABASE_KV variables (User provided specific names)
+  if (process.env.DATABASE_KV_REST_API_URL && process.env.DATABASE_KV_REST_API_TOKEN) {
+    try {
+      console.log('[Redis] Initializing Redis client with DATABASE_KV vars...');
+      globalStore.redis = new Redis({
+        url: process.env.DATABASE_KV_REST_API_URL,
+        token: process.env.DATABASE_KV_REST_API_TOKEN,
+      });
+      console.log('[Redis] Successfully initialized with DATABASE_KV vars');
+      return globalStore.redis;
+    } catch (e) {
+      console.error("[Redis] Failed to initialize with DATABASE_KV vars:", e);
     }
   }
   
-  console.log('[Redis] Env vars not found, using in-memory storage');
+  console.log('[Redis] Env vars not found. UPSTASH:', !!process.env.UPSTASH_REDIS_REST_URL, 'KV:', !!process.env.KV_REST_API_URL, 'DATABASE_KV:', !!process.env.DATABASE_KV_REST_API_URL);
+  console.log('[Redis] Using in-memory storage (data will not persist)');
   return null;
 }
 
