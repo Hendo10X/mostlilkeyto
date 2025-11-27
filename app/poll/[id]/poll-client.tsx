@@ -92,7 +92,21 @@ export default function PollClient({ poll }: { poll: Poll }) {
         <div className="space-y-4">
           {currentPoll.options.map((option, index) => {
             const percentage = totalVotes === 0 ? 0 : Math.round((option.votes / totalVotes) * 100);
-            const colorClass = index === 0 ? "text-red-500" : index === 1 ? "text-blue-400" : "text-purple-400";
+            const colors = [
+              "text-green-400",
+              "text-red-400",
+              "text-blue-400",
+              "text-yellow-400",
+              "text-purple-400",
+              "text-pink-400",
+              "text-orange-400",
+              "text-teal-400",
+              "text-cyan-400",
+              "text-indigo-400",
+              "text-rose-400",
+              "text-emerald-400"
+            ];
+            const colorClass = colors[index % colors.length];
             
             return (
               <div 

@@ -98,37 +98,47 @@ export default function CreatePoll() {
 
         {/* Question Section */}
         <div className="flex flex-col md:flex-row md:items-center gap-4 relative">
-          <span className="text-xl text-gray-200 whitespace-nowrap">Who is more likely to</span>
-          <div className="relative w-full md:w-auto flex-1" ref={dropdownRef}>
+          <span className="text-2xl md:text-xl text-gray-200 font-bold md:font-normal text-center md:text-left">Who is more likely to</span>
+          <div className="relative w-full flex-1" ref={dropdownRef}>
             <input
               type="text"
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
               onFocus={() => setShowDropdown(true)}
-              className="w-full bg-[#27272a] text-green-400 px-4 py-2 rounded-full outline-none focus:ring-2 focus:ring-green-500/50 transition-all placeholder-gray-500"
+              className="w-full bg-[#27272a] text-green-400 px-6 py-3 md:px-4 md:py-2 rounded-2xl md:rounded-full text-lg md:text-base outline-none focus:ring-2 focus:ring-green-500/50 transition-all placeholder-gray-500"
               placeholder="type here..."
             />
             
             {/* Dropdown */}
             {showDropdown && (
-              <div className="absolute top-full left-0 mt-2 w-full bg-[#27272a] rounded-2xl overflow-hidden shadow-xl z-10 py-2">
-                {suggestions.map((suggestion, index) => (
-                  <div
-                    key={index}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className={`px-4 py-3 cursor-pointer hover:bg-[#3f3f46] transition-colors ${
-                      index === 0 ? "text-green-400" :
-                      index === 1 ? "text-green-400" :
-                      index === 2 ? "text-red-400" :
-                      index === 3 ? "text-yellow-400" :
-                      index === 4 ? "text-blue-400" :
-                      "text-purple-400"
-                    }`}
-                  >
-                    {suggestion}
-                  </div>
-                ))}
-
+              <div className="absolute top-full left-0 mt-2 w-full bg-[#27272a] rounded-2xl overflow-hidden shadow-xl z-10 py-2 border border-gray-800">
+                {suggestions.map((suggestion, index) => {
+                  const colors = [
+                    "text-green-400",
+                    "text-red-400",
+                    "text-blue-400",
+                    "text-yellow-400",
+                    "text-purple-400",
+                    "text-pink-400",
+                    "text-orange-400",
+                    "text-teal-400",
+                    "text-cyan-400",
+                    "text-indigo-400",
+                    "text-rose-400",
+                    "text-emerald-400"
+                  ];
+                  const colorClass = colors[index % colors.length];
+                  
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className={`px-4 py-3 cursor-pointer hover:bg-[#3f3f46] transition-colors text-lg md:text-base ${colorClass}`}
+                    >
+                      {suggestion}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
