@@ -63,7 +63,7 @@ export default function PollClient({ poll }: { poll: Poll }) {
       <div className="w-full max-w-2xl space-y-8 mt-20">
         
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Create poll</h1>
+          <h1 className="text-3xl font-bold">Votes</h1>
           <div className="flex items-center gap-3 text-xl">
             <span className="text-gray-200">Who is more likely to</span>
             <span className="bg-[#27272a] text-green-400 px-4 py-1 rounded-full font-medium">

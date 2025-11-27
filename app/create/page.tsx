@@ -9,6 +9,7 @@ import { BackButton } from "@/components/BackButton";
 import { BouncyButton } from "@/components/BouncyButton";
 
 import { useToast } from "@/components/ToastProvider";
+import { Trash2 } from "lucide-react";
 
 export default function CreatePoll() {
   const [question, setQuestion] = useState("");
@@ -133,23 +134,30 @@ export default function CreatePoll() {
           </div>
         </div>
 
+
+
         {/* Options Section */}
         <div className="space-y-6">
           {options.map((option, index) => (
-            <div key={index} className="flex items-center gap-4">
-              <input
-                type="text"
-                value={option}
-                onChange={(e) => handleOptionChange(index, e.target.value)}
-                className="flex-1 bg-transparent border-b border-gray-700 py-2 text-lg outline-none focus:border-gray-500 transition-colors placeholder-gray-600"
-                placeholder={`Option ${index + 1}`}
-              />
+            <div key={index} className="flex items-center gap-4 group">
+              <div className="flex-1 flex items-center gap-3 border-b border-gray-700 focus-within:border-gray-500 transition-colors">
+                <input
+                  type="text"
+                  id={`option-${index}`}
+                  value={option}
+                  onChange={(e) => handleOptionChange(index, e.target.value)}
+                  className="flex-1 bg-transparent py-2 text-lg outline-none placeholder-gray-600"
+                  placeholder={`Option ${index + 1}`}
+                />
+              </div>
+              
               {options.length > 2 && (
                 <button
                   onClick={() => deleteOption(index)}
-                  className="text-red-400/60 hover:text-red-500 transition-colors text-sm font-medium"
+                  className="text-red-400/60 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10"
+                  title="Delete option"
                 >
-                  Delete
+                  <Trash2 size={20} />
                 </button>
               )}
             </div>
