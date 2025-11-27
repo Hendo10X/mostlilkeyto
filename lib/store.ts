@@ -13,6 +13,8 @@ export interface Poll {
   options: PollOption[];
   createdAt: number;
   voters: string[];
+  creatorId: string;
+  creatorName: string;
 }
 
 // In-memory fallback for local development or if KV fails
@@ -75,7 +77,7 @@ function getRedis(): Redis | null {
   return null;
 }
 
-export const createPoll = async (question: string, options: string[]): Promise<string> => {
+export const createPoll = async (question: string, options: string[], creatorId: string, creatorName: string): Promise<string> => {
   const id = nanoid(10);
   const poll: Poll = {
     id,
@@ -83,6 +85,8 @@ export const createPoll = async (question: string, options: string[]): Promise<s
     options: options.map(opt => ({ id: nanoid(), text: opt, votes: 0 })),
     createdAt: Date.now(),
     voters: [],
+    creatorId,
+    creatorName,
   };
   
   const redis = getRedis();

@@ -80,7 +80,14 @@ export default function PollClient({ poll }: { poll: Poll }) {
       <div className="w-full max-w-2xl space-y-8 mt-20">
         
         <div className="space-y-2">
-          <h1 className="text-3xl font-bold">Votes</h1>
+          <div className="flex justify-between items-end">
+            <h1 className="text-3xl font-bold">Votes</h1>
+            {currentPoll.creatorName && (
+              <span className="text-sm text-gray-400 pb-1">
+                Created by <span className="text-white font-medium">{currentPoll.creatorName}</span>
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 text-xl">
             <span className="text-gray-200">Who is more likely to</span>
             <span className="bg-[#27272a] text-green-400 px-4 py-1 rounded-full font-medium">
@@ -136,13 +143,16 @@ export default function PollClient({ poll }: { poll: Poll }) {
           >
             Share
           </BouncyButton>
-          <BouncyButton 
-            onClick={handleDeleteClick}
-            disabled={isDeleting}
-            className="bg-[#ff4b4b] text-white px-6 py-2.5 rounded-full font-medium text-sm hover:bg-[#ff3333] transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Delete Poll
-          </BouncyButton>
+          
+          {user && user.id === currentPoll.creatorId && (
+            <BouncyButton 
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              className="bg-[#ff4b4b] text-white px-6 py-2.5 rounded-full font-medium text-sm hover:bg-[#ff3333] transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Delete Poll
+            </BouncyButton>
+          )}
         </div>
 
       </div>

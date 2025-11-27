@@ -5,8 +5,17 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@clerk/nextjs/server";
 
+import { currentUser } from "@clerk/nextjs/server";
+
 export async function createPollAction(question: string, options: string[]) {
-  const id = await createPoll(question, options.filter(o => o.trim() !== ""));
+  const user = await currentUser();
+  
+  if (!user) {
+    throw new Error("User must be signed in to create a poll");
+  }
+
+  const creatorName = user.fullName || user.username || "Anonymous";
+  const id = await createPoll(question, options.filter(o => o.trim() !== ""), user.id, creatorName);
   return id;
 }
 
