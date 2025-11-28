@@ -35,13 +35,13 @@ export default function Home() {
         >
           {/* Logo */}
           <motion.div 
-            className="relative w-36 h-12 md:w-48 md:h-16"
+            className="relative w-28 h-10 md:w-36 md:h-12"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
              <Image
-              src="/MLTlogo.svg"
+              src="/likesy.svg"
               alt="mostlikelyto logo"
               fill
               className="object-contain object-left"
@@ -57,7 +57,7 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.4 }}
           >
             <p className="text-base md:text-lg text-gray-400 leading-relaxed">
-              is a social polling and prediction platform designed around answering the question: &quot;Who is most likely to...?&quot; Unlike traditional surveys that ask for opinions, this app is built for users to cast predictions on future actions, outcomes, or behaviors, thereby creating a community score on the perceived likelihood of an event.
+              Likesy is a social polling and prediction platform designed around answering the question: &quot;Who is most likely to...?&quot; Unlike traditional surveys that ask for opinions, this app is built for users to cast predictions on future actions, outcomes, or behaviors, thereby creating a community score on the perceived likelihood of an event.
             </p>
           </motion.div>
 
