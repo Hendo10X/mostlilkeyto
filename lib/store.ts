@@ -95,6 +95,8 @@ export const createPoll = async (question: string, options: string[], creatorId:
     if (redis) {
       console.log(`[createPoll] Saving to Redis: ${id}`);
       await redis.set(`poll:${id}`, poll);
+      // Index by user
+      await redis.sadd(`user:polls:${creatorId}`, id);
     } else {
       console.log(`[createPoll] Saving to in-memory: ${id}`);
       polls[id] = poll;
@@ -172,5 +174,37 @@ export const deletePoll = async (id: string): Promise<void> => {
   } catch (error) {
     console.error("Failed to delete poll from Redis:", error);
     delete polls[id];
+  }
+};
+
+export const getUserPolls = async (userId: string): Promise<Poll[]> => {
+  const redis = getRedis();
+  try {
+    if (redis) {
+      // Get list of poll IDs for user
+      const pollIds = await redis.smembers(`user:polls:${userId}`);
+      if (!pollIds || pollIds.length === 0) {
+        return [];
+      }
+      
+      // Fetch all polls in parallel
+      const polls = await Promise.all(
+        pollIds.map(id => redis.get<Poll>(`poll:${id}`))
+      );
+      
+      // Filter out nulls (in case a poll was deleted but ID remained in set) and sort by newest
+      return polls
+        .filter((p): p is Poll => p !== null)
+        .sort((a, b) => b.createdAt - a.createdAt);
+    }
+    
+    // In-memory fallback
+    return Object.values(polls)
+      .filter(p => p.creatorId === userId)
+      .sort((a, b) => b.createdAt - a.createdAt);
+      
+  } catch (error) {
+    console.error("Failed to fetch user polls:", error);
+    return [];
   }
 };

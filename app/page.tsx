@@ -23,6 +23,11 @@ export default function Home() {
           </SignUpButton>
         </SignedOut>
         <SignedIn>
+          <Link href="/dashboard">
+            <BouncyButton className="text-white hover:text-gray-300 transition-colors text-sm md:text-base font-medium mr-4">
+              Dashboard
+            </BouncyButton>
+          </Link>
           <UserButton afterSignOutUrl="/"/>
         </SignedIn>
       </div>
