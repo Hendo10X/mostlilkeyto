@@ -9,7 +9,7 @@ import { BouncyButton } from "@/components/BouncyButton";
 export default function Home() {
   return (
     <div className="flex min-h-[100dvh] items-center justify-center bg-[#1a1a1a] text-white font-sans relative overflow-hidden">
-      <div className="absolute top-4 right-4 z-[100] flex gap-4">
+      <div className="absolute top-6 right-6 z-[100] flex gap-4">
         <SignedOut>
           <SignInButton mode="modal">
             <BouncyButton className="text-white hover:text-gray-300 transition-colors text-sm md:text-base font-medium">
