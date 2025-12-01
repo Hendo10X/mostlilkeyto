@@ -20,6 +20,20 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "mostlikelyto",
   description: "Social polling and prediction platform",
+  metadataBase: new URL("https://mostlikelyto.vercel.app"),
+  openGraph: {
+    title: "mostlikelyto",
+    description: "Social polling and prediction platform",
+    url: "https://mostlikelyto.vercel.app",
+    siteName: "mostlikelyto",
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "mostlikelyto",
+    description: "Social polling and prediction platform",
+  },
 };
 
 export default function RootLayout({
