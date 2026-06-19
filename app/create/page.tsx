@@ -1,71 +1,80 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import Link from "next/link";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Plus, Trash2 } from "lucide-react";
 import { createPollAction } from "../actions";
-import { UserButton, useUser } from "@clerk/nextjs";
 import { BackButton } from "@/components/BackButton";
-import { BouncyButton } from "@/components/BouncyButton";
+import { UserMenu } from "@/components/UserMenu";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
+import {
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
+} from "@/components/ui/popover";
 
-import { useToast } from "@/components/ToastProvider";
-import { Trash2 } from "lucide-react";
+const SUGGESTIONS = [
+  "buy a lambo",
+  "get a girlfriend",
+  "purchase Bitcoin",
+  "start a business",
+  "leave town",
+  "become famous",
+];
 
 export default function CreatePoll() {
   const [question, setQuestion] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
   const [options, setOptions] = useState(["", ""]);
   const [isCreating, setIsCreating] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const router = useRouter();
-  const { user } = useUser();
-  const { addToast } = useToast();
 
-  const suggestions = [
-    "buy a lambo",
-    "Get a girlfriend",
-    "Purchase Bitcoin",
-    "Start a business",
-    "Leave town",
-    "become famous",
-  ];
+  const formRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setShowDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
+  const filtered = SUGGESTIONS.filter(
+    (s) => s.toLowerCase() !== question.trim().toLowerCase(),
+  );
 
   const handleOptionChange = (index: number, value: string) => {
-    const newOptions = [...options];
-    newOptions[index] = value;
-    setOptions(newOptions);
+    setOptions((prev) => prev.map((o, i) => (i === index ? value : o)));
   };
 
-  const addOption = () => {
-    setOptions([...options, ""]);
-  };
+  const addOption = () => setOptions((prev) => [...prev, ""]);
 
   const deleteOption = (index: number) => {
-    if (options.length > 2) {
-      const newOptions = options.filter((_, i) => i !== index);
-      setOptions(newOptions);
-    }
+    setOptions((prev) =>
+      prev.length > 2 ? prev.filter((_, i) => i !== index) : prev,
+    );
   };
 
-  const handleSuggestionClick = (suggestion: string) => {
-    setQuestion(suggestion);
-    setShowDropdown(false);
+  // transitions-dev #12 — shake the form when the input is invalid.
+  const shake = () => {
+    const el = formRef.current;
+    if (!el) return;
+    el.classList.remove("is-shaking");
+    void el.offsetWidth;
+    el.classList.add("is-shaking");
+    setTimeout(() => el.classList.remove("is-shaking"), 300);
   };
 
   const handleCreatePoll = async () => {
-    if (!question || options.every(o => !o.trim())) return;
+    const validOptions = options.filter((o) => o.trim() !== "");
+    if (!question.trim() || validOptions.length < 2) {
+      shake();
+      toast.error("Add a question and at least two options.");
+      return;
+    }
+
     setIsCreating(true);
     try {
       const id = await createPollAction(question, options);
@@ -73,124 +82,124 @@ export default function CreatePoll() {
     } catch (error) {
       console.error("Failed to create poll:", error);
       setIsCreating(false);
-      addToast("Failed to create poll. Please try again.", "error");
+      toast.error("Failed to create poll. Please try again.");
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white font-sans flex flex-col items-center p-8 relative">
+    <div className="relative flex min-h-screen flex-col items-center bg-background p-8 font-sans text-foreground">
       <BackButton />
-      {/* User Profile - Top Right */}
-      <div className="absolute top-4 right-4 z-50 flex items-center gap-3">
-        {user && (
-          <div className="text-right hidden sm:block">
-            <p className="text-sm font-medium text-white">{user.fullName}</p>
-            <p className="text-xs text-gray-400">{user.primaryEmailAddress?.emailAddress}</p>
-          </div>
-        )}
-        <UserButton afterSignOutUrl="/"/>
-      </div>
+      <header className="absolute top-6 right-6 z-50">
+        <UserMenu showDashboard={false} />
+      </header>
 
-      <div className="w-full max-w-2xl space-y-12 mt-20">
-        
-        {/* Header */}
-        <h1 className="text-3xl font-bold">Create poll</h1>
+      <div ref={formRef} className="t-input mt-20 w-full max-w-2xl">
+        <FieldGroup className="gap-12">
+          <h1 className="text-3xl font-bold">Create poll</h1>
 
-        {/* Question Section */}
-        <div className="flex flex-col md:flex-row md:items-center gap-4 relative">
-          <span className="text-2xl md:text-xl text-gray-200 font-bold md:font-normal text-center md:text-left">Who is more likely to</span>
-          <div className="relative w-full flex-1" ref={dropdownRef}>
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              onFocus={() => setShowDropdown(true)}
-              className="w-full bg-[#27272a] text-green-400 px-6 py-3 md:px-4 md:py-2 rounded-2xl md:rounded-full text-lg md:text-base outline-none focus:ring-2 focus:ring-green-500/50 transition-all placeholder-gray-500"
-              placeholder="type here..."
-            />
-            
-            {/* Dropdown */}
-            {showDropdown && (
-              <div className="absolute top-full left-0 mt-2 w-full bg-[#27272a] rounded-2xl overflow-hidden shadow-xl z-10 py-2 border border-gray-800">
-                {suggestions.map((suggestion, index) => {
-                  const colors = [
-                    "text-green-400",
-                    "text-red-400",
-                    "text-blue-400",
-                    "text-yellow-400",
-                    "text-purple-400",
-                    "text-pink-400",
-                    "text-orange-400",
-                    "text-teal-400",
-                    "text-cyan-400",
-                    "text-indigo-400",
-                    "text-rose-400",
-                    "text-emerald-400"
-                  ];
-                  const colorClass = colors[index % colors.length];
-                  
-                  return (
-                    <div
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className={`px-4 py-3 cursor-pointer hover:bg-[#3f3f46] transition-colors text-lg md:text-base ${colorClass}`}
+          {/* Question */}
+          <div className="flex flex-col gap-4 md:flex-row md:items-center">
+            <span className="text-center text-2xl font-bold text-foreground md:text-left md:text-xl md:font-normal md:text-muted-foreground">
+              Who is more likely to
+            </span>
+            <Popover open={showSuggestions && filtered.length > 0}>
+              <PopoverAnchor asChild>
+                <Input
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() =>
+                    setTimeout(() => setShowSuggestions(false), 150)
+                  }
+                  className="flex-1 rounded-full text-primary md:text-base"
+                  placeholder="type here..."
+                  aria-label="Poll question"
+                />
+              </PopoverAnchor>
+              <PopoverContent
+                align="start"
+                onOpenAutoFocus={(e) => e.preventDefault()}
+                className="w-[var(--radix-popover-trigger-width)] p-1"
+              >
+                <div className="flex flex-col">
+                  {filtered.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      type="button"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setQuestion(suggestion);
+                        setShowSuggestions(false);
+                      }}
+                      className="rounded-md px-3 py-2 text-left text-sm text-primary transition-colors hover:bg-accent"
                     >
                       {suggestion}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    </button>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
-        </div>
 
-
-
-        {/* Options Section */}
-        <div className="space-y-6">
-          {options.map((option, index) => (
-            <div key={index} className="flex items-center gap-4 group">
-              <div className="flex-1 flex items-center gap-3 border-b border-gray-700 focus-within:border-gray-500 transition-colors">
-                <input
-                  type="text"
-                  id={`option-${index}`}
-                  value={option}
-                  onChange={(e) => handleOptionChange(index, e.target.value)}
-                  className="flex-1 bg-transparent py-2 text-lg outline-none placeholder-gray-600"
-                  placeholder={`Option ${index + 1}`}
-                />
-              </div>
-              
-              {options.length > 2 && (
-                <button
-                  onClick={() => deleteOption(index)}
-                  className="text-red-400/60 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-500/10"
-                  title="Delete option"
+          {/* Options */}
+          <FieldSet>
+            <FieldLegend>Options</FieldLegend>
+            <FieldGroup className="gap-4">
+              {options.map((option, index) => (
+                <Field
+                  key={index}
+                  orientation="horizontal"
+                  className="items-center gap-3"
                 >
-                  <Trash2 size={20} />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+                  <FieldLabel htmlFor={`option-${index}`} className="sr-only">
+                    Option {index + 1}
+                  </FieldLabel>
+                  <Input
+                    id={`option-${index}`}
+                    value={option}
+                    onChange={(e) => handleOptionChange(index, e.target.value)}
+                    placeholder={`Option ${index + 1}`}
+                    className="flex-1"
+                  />
+                  {options.length > 2 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteOption(index)}
+                      className="text-destructive transition-transform hover:bg-destructive/10 active:scale-[0.96]"
+                      aria-label={`Delete option ${index + 1}`}
+                    >
+                      <Trash2 />
+                    </Button>
+                  )}
+                </Field>
+              ))}
+            </FieldGroup>
+          </FieldSet>
 
-        {/* Footer Buttons */}
-        <div className="flex gap-4 pt-4">
-          <BouncyButton
-            onClick={addOption}
-            className="bg-[#27272a] text-white px-6 py-2.5 rounded-full font-medium text-sm hover:bg-[#3f3f46] transition-colors"
-          >
-            Add more
-          </BouncyButton>
-          <BouncyButton 
-            onClick={handleCreatePoll}
-            disabled={isCreating}
-            className="bg-white text-black px-8 py-2.5 rounded-full font-bold text-sm hover:bg-gray-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isCreating ? "Creating..." : "Create poll"}
-          </BouncyButton>
-        </div>
-
+          {/* Footer */}
+          <div className="flex gap-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={addOption}
+              className="rounded-full transition-transform active:scale-[0.96]"
+            >
+              <Plus data-icon="inline-start" />
+              Add more
+            </Button>
+            <Button
+              type="button"
+              onClick={handleCreatePoll}
+              disabled={isCreating}
+              className="rounded-full font-bold transition-transform active:scale-[0.96]"
+            >
+              {isCreating && <Spinner data-icon="inline-start" />}
+              {isCreating ? "Creating..." : "Create poll"}
+            </Button>
+          </div>
+        </FieldGroup>
       </div>
     </div>
   );

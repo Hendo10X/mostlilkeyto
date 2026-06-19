@@ -2,11 +2,28 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { motion } from "motion/react";
+import { Plus, BarChart2, Calendar } from "lucide-react";
 import { getUserPollsAction } from "@/app/actions";
 import { Poll } from "@/lib/store";
-import { BouncyButton } from "@/components/BouncyButton";
-import { motion } from "motion/react";
-import { Loader2, Plus, BarChart2, Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { UserMenu } from "@/components/UserMenu";
+import {
+  Card,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
 
 export default function DashboardPage() {
   const [polls, setPolls] = useState<Poll[]>([]);
@@ -15,77 +32,103 @@ export default function DashboardPage() {
   useEffect(() => {
     async function fetchPolls() {
       try {
-        const userPolls = await getUserPollsAction();
-        setPolls(userPolls);
+        setPolls(await getUserPollsAction());
       } catch (error) {
         console.error("Failed to fetch polls:", error);
       } finally {
         setLoading(false);
       }
     }
-
     fetchPolls();
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#1a1a1a] text-white flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white font-sans p-6 md:p-12">
-      <div className="max-w-5xl mx-auto space-y-8">
-        <header className="flex items-center justify-between">
+    <div className="min-h-screen bg-background p-6 font-sans text-foreground md:p-12">
+      <div className="mx-auto max-w-5xl">
+        <header className="mb-8 flex items-center justify-between gap-4">
           <h1 className="text-3xl font-bold">My Polls</h1>
-          <Link href="/create">
-            <BouncyButton className="bg-white text-black px-4 py-2 rounded-full font-semibold hover:bg-gray-100 transition-colors flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Create New
-            </BouncyButton>
-          </Link>
+          <div className="flex items-center gap-3">
+            <Button
+              asChild
+              className="rounded-full transition-transform active:scale-[0.96]"
+            >
+              <Link href="/create">
+                <Plus data-icon="inline-start" />
+                Create New
+              </Link>
+            </Button>
+            <UserMenu showDashboard={false} />
+          </div>
         </header>
 
-        {polls.length === 0 ? (
-          <div className="text-center py-20 bg-[#242424] rounded-2xl border border-gray-800">
-            <BarChart2 className="w-12 h-12 text-gray-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">No polls yet</h2>
-            <p className="text-gray-400 mb-6">Create your first poll to start collecting predictions.</p>
-            <Link href="/create">
-              <BouncyButton className="bg-white text-black px-6 py-3 rounded-full font-medium hover:bg-gray-100 transition-colors">
-                Create Poll
-              </BouncyButton>
-            </Link>
+        {loading ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="h-44">
+                <CardHeader>
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-6 w-1/2" />
+                </CardHeader>
+                <CardFooter className="mt-auto gap-2">
+                  <Skeleton className="h-5 w-20" />
+                </CardFooter>
+              </Card>
+            ))}
           </div>
+        ) : polls.length === 0 ? (
+          <Empty className="rounded-3xl border border-border bg-card py-20">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <BarChart2 />
+              </EmptyMedia>
+              <EmptyTitle>No polls yet</EmptyTitle>
+              <EmptyDescription>
+                Create your first poll to start collecting predictions.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button
+                asChild
+                className="rounded-full transition-transform active:scale-[0.96]"
+              >
+                <Link href="/create">Create Poll</Link>
+              </Button>
+            </EmptyContent>
+          </Empty>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
             {polls.map((poll, index) => (
               <motion.div
                 key={poll.id}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
+                transition={{
+                  delay: index * 0.05,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
               >
-                <Link href={`/dashboard/poll/${poll.id}`}>
-                  <div className="bg-[#242424] p-6 rounded-2xl border border-gray-800 hover:border-gray-600 transition-colors h-full flex flex-col group cursor-pointer">
-                    <h3 className="text-xl font-semibold mb-4 line-clamp-2 group-hover:text-blue-400 transition-colors">
-                      {poll.question}
-                    </h3>
-                    
-                    <div className="mt-auto space-y-4">
-                      <div className="flex items-center gap-2 text-sm text-gray-400">
-                        <BarChart2 className="w-4 h-4" />
-                        <span>{poll.voters.length} votes</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <Calendar className="w-3 h-3" />
-                        <span>{new Date(poll.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  </div>
+                <Link href={`/dashboard/poll/${poll.id}`} className="group block h-full">
+                  <Card className="h-full transition-colors hover:border-primary/50">
+                    <CardHeader>
+                      <CardTitle className="line-clamp-2 transition-colors group-hover:text-primary">
+                        {poll.question}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardFooter className="mt-auto flex-col items-start gap-3">
+                      <Badge variant="secondary" className="gap-1.5">
+                        <BarChart2 />
+                        <span className="tabular-nums">
+                          {poll.voters.length} votes
+                        </span>
+                      </Badge>
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Calendar className="size-3" />
+                        <span className="tabular-nums">
+                          {new Date(poll.createdAt).toLocaleDateString()}
+                        </span>
+                      </span>
+                    </CardFooter>
+                  </Card>
                 </Link>
               </motion.div>
             ))}

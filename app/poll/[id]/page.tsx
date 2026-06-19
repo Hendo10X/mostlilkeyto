@@ -1,4 +1,4 @@
-import { getPoll, votePoll } from "@/lib/store";
+import { getPoll } from "@/lib/store";
 import { notFound } from "next/navigation";
 import PollClient from "./poll-client";
 

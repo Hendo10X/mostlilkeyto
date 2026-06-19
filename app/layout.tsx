@@ -1,15 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
-import {
-  ClerkProvider,
-  SignInButton,
-  SignUpButton,
-  SignedIn,
-  SignedOut,
-  UserButton,
-} from "@clerk/nextjs";
 import "./globals.css";
-import { ToastProvider } from "@/components/ToastProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -42,14 +34,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
-      <html lang="en">
-        <body className={`${dmSans.variable} antialiased`}>
-          <ToastProvider>
-            {children}
-          </ToastProvider>
-        </body>
-      </html>
-    </ClerkProvider>
+    <html lang="en" className="dark">
+      <body className={`${dmSans.variable} antialiased`}>
+        {children}
+        <Toaster theme="dark" position="bottom-right" />
+      </body>
+    </html>
   );
 }

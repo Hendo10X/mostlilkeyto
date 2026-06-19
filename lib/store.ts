@@ -1,5 +1,7 @@
-import { nanoid } from 'nanoid';
-import { Redis } from '@upstash/redis';
+import { nanoid } from "nanoid";
+import { eq, desc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { polls, pollOptions, pollVotes } from "@/lib/db/schema";
 
 export interface PollOption {
   id: string;
@@ -17,194 +19,104 @@ export interface Poll {
   creatorName: string;
 }
 
-// In-memory fallback for local development or if KV fails
-const globalStore = global as unknown as { polls: Record<string, Poll>; redis?: Redis };
-if (!globalStore.polls) {
-  globalStore.polls = {};
-}
-const polls = globalStore.polls;
-
-// Lazy Redis initialization - only create when first needed
-function getRedis(): Redis | null {
-  if (globalStore.redis) {
-    return globalStore.redis;
-  }
-  
-  // Check for Upstash Redis variables
-  if (process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN) {
-    try {
-      console.log('[Redis] Initializing Redis client with UPSTASH_REDIS vars...');
-      globalStore.redis = Redis.fromEnv();
-      console.log('[Redis] Successfully initialized');
-      return globalStore.redis;
-    } catch (e) {
-      console.error("[Redis] Failed to initialize with UPSTASH vars:", e);
-    }
-  }
-
-  // Check for Vercel KV variables (fallback)
-  if (process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
-    try {
-      console.log('[Redis] Initializing Redis client with KV vars...');
-      globalStore.redis = new Redis({
-        url: process.env.KV_REST_API_URL,
-        token: process.env.KV_REST_API_TOKEN,
-      });
-      console.log('[Redis] Successfully initialized with KV vars');
-      return globalStore.redis;
-    } catch (e) {
-      console.error("[Redis] Failed to initialize with KV vars:", e);
-    }
-  }
-
-  // Check for DATABASE_KV variables (User provided specific names)
-  if (process.env.DATABASE_KV_REST_API_URL && process.env.DATABASE_KV_REST_API_TOKEN) {
-    try {
-      console.log('[Redis] Initializing Redis client with DATABASE_KV vars...');
-      globalStore.redis = new Redis({
-        url: process.env.DATABASE_KV_REST_API_URL,
-        token: process.env.DATABASE_KV_REST_API_TOKEN,
-      });
-      console.log('[Redis] Successfully initialized with DATABASE_KV vars');
-      return globalStore.redis;
-    } catch (e) {
-      console.error("[Redis] Failed to initialize with DATABASE_KV vars:", e);
-    }
-  }
-  
-  console.log('[Redis] Env vars not found. UPSTASH:', !!process.env.UPSTASH_REDIS_REST_URL, 'KV:', !!process.env.KV_REST_API_URL, 'DATABASE_KV:', !!process.env.DATABASE_KV_REST_API_URL);
-  console.log('[Redis] Using in-memory storage (data will not persist)');
-  return null;
-}
-
-export const createPoll = async (question: string, options: string[], creatorId: string, creatorName: string): Promise<string> => {
+export const createPoll = async (
+  question: string,
+  options: string[],
+  creatorId: string,
+  creatorName: string,
+): Promise<string> => {
   const id = nanoid(10);
-  const poll: Poll = {
-    id,
-    question,
-    options: options.map(opt => ({ id: nanoid(), text: opt, votes: 0 })),
-    createdAt: Date.now(),
-    voters: [],
-    creatorId,
-    creatorName,
-  };
-  
-  const redis = getRedis();
-  
-  try {
-    if (redis) {
-      console.log(`[createPoll] Saving to Redis: ${id}`);
-      await redis.set(`poll:${id}`, poll);
-      // Index by user
-      await redis.sadd(`user:polls:${creatorId}`, id);
-    } else {
-      console.log(`[createPoll] Saving to in-memory: ${id}`);
-      polls[id] = poll;
+
+  await db.transaction(async (tx) => {
+    await tx.insert(polls).values({
+      id,
+      question,
+      creatorId,
+      creatorName,
+      createdAt: new Date(),
+    });
+
+    if (options.length > 0) {
+      await tx.insert(pollOptions).values(
+        options.map((text, position) => ({
+          id: nanoid(),
+          pollId: id,
+          text,
+          position,
+        })),
+      );
     }
-  } catch (error) {
-    console.error("Failed to save poll to Redis, falling back to in-memory:", error);
-    polls[id] = poll;
-  }
-  
+  });
+
   return id;
 };
 
 export const getPoll = async (id: string): Promise<Poll | null> => {
-  console.log(`[getPoll] Fetching: ${id}`);
-  const redis = getRedis();
-  
-  try {
-    if (redis) {
-      const poll = await redis.get<Poll>(`poll:${id}`);
-      if (poll) {
-        console.log(`[getPoll] Found in Redis: ${id}`);
-        return poll;
-      }
-    }
-  } catch (error) {
-    console.error("Failed to fetch poll from Redis:", error);
+  const [poll] = await db.select().from(polls).where(eq(polls.id, id)).limit(1);
+  if (!poll) return null;
+
+  const options = await db
+    .select()
+    .from(pollOptions)
+    .where(eq(pollOptions.pollId, id))
+    .orderBy(pollOptions.position);
+
+  const votes = await db
+    .select({ optionId: pollVotes.optionId, userId: pollVotes.userId })
+    .from(pollVotes)
+    .where(eq(pollVotes.pollId, id));
+
+  const countByOption = new Map<string, number>();
+  for (const v of votes) {
+    countByOption.set(v.optionId, (countByOption.get(v.optionId) ?? 0) + 1);
   }
-  
-  const memoryPoll = polls[id] || null;
-  console.log(`[getPoll] Found in memory: ${!!memoryPoll}`);
-  return memoryPoll;
+
+  return {
+    id: poll.id,
+    question: poll.question,
+    createdAt: poll.createdAt.getTime(),
+    creatorId: poll.creatorId,
+    creatorName: poll.creatorName,
+    voters: votes.map((v) => v.userId),
+    options: options.map((o) => ({
+      id: o.id,
+      text: o.text,
+      votes: countByOption.get(o.id) ?? 0,
+    })),
+  };
 };
 
-export const votePoll = async (pollId: string, optionId: string, userId: string): Promise<boolean> => {
+export const votePoll = async (
+  pollId: string,
+  optionId: string,
+  userId: string,
+): Promise<boolean> => {
   try {
-    const poll = await getPoll(pollId);
-    
-    if (poll) {
-      if (poll.voters.includes(userId)) {
-        return false;
-      }
-      const option = poll.options.find(o => o.id === optionId);
-      if (option) {
-        option.votes += 1;
-        poll.voters.push(userId);
-        
-        const redis = getRedis();
-        try {
-          if (redis) {
-            await redis.set(`poll:${pollId}`, poll);
-          } else {
-            polls[pollId] = poll;
-          }
-        } catch (error) {
-          console.error("Failed to update poll in Redis:", error);
-          polls[pollId] = poll;
-        }
-        return true;
-      }
-    }
-    return false;
-  } catch (error) {
-    console.error("Failed to vote:", error);
+    await db.insert(pollVotes).values({
+      id: nanoid(),
+      pollId,
+      optionId,
+      userId,
+    });
+    return true;
+  } catch {
+    // Unique constraint (pollId, userId) → user already voted, or invalid refs.
     return false;
   }
 };
 
 export const deletePoll = async (id: string): Promise<void> => {
-  const redis = getRedis();
-  try {
-    if (redis) {
-      await redis.del(`poll:${id}`);
-    }
-    delete polls[id];
-  } catch (error) {
-    console.error("Failed to delete poll from Redis:", error);
-    delete polls[id];
-  }
+  // Cascades remove poll_options and poll_votes.
+  await db.delete(polls).where(eq(polls.id, id));
 };
 
 export const getUserPolls = async (userId: string): Promise<Poll[]> => {
-  const redis = getRedis();
-  try {
-    if (redis) {
-      // Get list of poll IDs for user
-      const pollIds = await redis.smembers(`user:polls:${userId}`);
-      if (!pollIds || pollIds.length === 0) {
-        return [];
-      }
-      
-      // Fetch all polls in parallel
-      const polls = await Promise.all(
-        pollIds.map(id => redis.get<Poll>(`poll:${id}`))
-      );
-      
-      // Filter out nulls (in case a poll was deleted but ID remained in set) and sort by newest
-      return polls
-        .filter((p): p is Poll => p !== null)
-        .sort((a, b) => b.createdAt - a.createdAt);
-    }
-    
-    // In-memory fallback
-    return Object.values(polls)
-      .filter(p => p.creatorId === userId)
-      .sort((a, b) => b.createdAt - a.createdAt);
-      
-  } catch (error) {
-    console.error("Failed to fetch user polls:", error);
-    return [];
-  }
+  const rows = await db
+    .select()
+    .from(polls)
+    .where(eq(polls.creatorId, userId))
+    .orderBy(desc(polls.createdAt));
+
+  const result = await Promise.all(rows.map((row) => getPoll(row.id)));
+  return result.filter((p): p is Poll => p !== null);
 };

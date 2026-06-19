@@ -1,63 +1,101 @@
 "use client";
 
 import { Poll } from "@/lib/store";
-import { useState, useEffect } from "react";
-import { voteAction, deletePollAction } from "../../actions"; 
-import { useToast } from "@/hooks/useToast";
-import { Modal } from "@/components/Modal";
-import { useUser } from "@clerk/nextjs";
-import { BouncyButton } from "@/components/BouncyButton";
-
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Share2, Trash2, Copy } from "lucide-react";
+import { voteAction, deletePollAction } from "../../actions";
+import { useSession } from "@/lib/auth-client";
+import { PopNumber } from "@/components/PopNumber";
+import { VoteSuccess } from "@/components/VoteSuccess";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+
+const CHART_VARS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
 export default function PollClient({ poll }: { poll: Poll }) {
   const [currentPoll, setCurrentPoll] = useState(poll);
+  const [prevPoll, setPrevPoll] = useState(poll);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [shareUrl, setShareUrl] = useState("");
-  const totalVotes = currentPoll.options.reduce((acc, opt) => acc + opt.votes, 0);
-  const toast = useToast();
-  const { user } = useUser();
+  const [shareUrl] = useState(() =>
+    typeof window !== "undefined" ? window.location.href : "",
+  );
+  const [successTick, setSuccessTick] = useState(0);
+
   const router = useRouter();
+  const { data: session } = useSession();
+  const totalVotes = currentPoll.options.reduce((acc, o) => acc + o.votes, 0);
+  const successTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Sync state with props when router.refresh() fetches new data
-  useEffect(() => {
+  // Sync to fresh server data when router.refresh() returns a new poll —
+  // adjusting state during render (React's recommended pattern) instead of
+  // an effect, so optimistic vote updates are reconciled with the server.
+  if (poll !== prevPoll) {
+    setPrevPoll(poll);
     setCurrentPoll(poll);
-  }, [poll]);
+  }
 
-  // Poll for updates every 2 seconds
+  // Poll for live updates.
   useEffect(() => {
-    const interval = setInterval(() => {
-      router.refresh();
-    }, 2000);
-    
+    const interval = setInterval(() => router.refresh(), 2000);
     return () => clearInterval(interval);
   }, [router]);
 
   useEffect(() => {
-    setShareUrl(window.location.href);
+    return () => {
+      if (successTimer.current) clearTimeout(successTimer.current);
+    };
   }, []);
 
+  const celebrate = () => {
+    setSuccessTick((t) => t + 1);
+    if (successTimer.current) clearTimeout(successTimer.current);
+    successTimer.current = setTimeout(() => setSuccessTick(0), 1300);
+  };
+
   const handleVote = async (optionId: string) => {
-    if (!user) {
+    if (!session) {
       toast.error("You must be signed in to vote!");
       return;
     }
-    const updatedPoll = await voteAction(currentPoll.id, optionId);
-    if (updatedPoll) {
-      const newTotalVotes = updatedPoll.options.reduce((acc, opt) => acc + opt.votes, 0);
-      if (newTotalVotes === totalVotes) {
-         toast.info("You have already voted on this poll.");
-      } else {
-         toast.success("Vote recorded!");
-      }
-      setCurrentPoll(updatedPoll);
-    }
-  };
+    const updated = await voteAction(currentPoll.id, optionId);
+    if (!updated) return;
 
-  const handleShareClick = () => {
-    setShowShareModal(true);
+    const newTotal = updated.options.reduce((acc, o) => acc + o.votes, 0);
+    if (newTotal === totalVotes) {
+      toast.info("You have already voted on this poll.");
+    } else {
+      toast.success("Vote recorded!");
+      celebrate();
+    }
+    setCurrentPoll(updated);
   };
 
   const handleCopyLink = () => {
@@ -66,144 +104,138 @@ export default function PollClient({ poll }: { poll: Poll }) {
     setShowShareModal(false);
   };
 
-  const handleDeleteClick = () => {
-    setShowDeleteModal(true);
-  };
-
   const handleConfirmDelete = async () => {
     setIsDeleting(true);
     await deletePollAction(currentPoll.id);
   };
 
+  const isOwner = session?.user.id === currentPoll.creatorId;
+
   return (
-    <div className="min-h-screen bg-[#1a1a1a] text-white font-sans flex flex-col items-center p-8">
-      <div className="w-full max-w-2xl space-y-8 mt-20">
-        
-        <div className="space-y-2">
-          <div className="flex justify-between items-end">
+    <div className="flex min-h-screen flex-col items-center bg-background p-8 font-sans text-foreground">
+      <VoteSuccess show={successTick > 0} />
+
+      <div className="mt-20 w-full max-w-2xl">
+        <div className="mb-8 flex flex-col gap-2">
+          <div className="flex items-end justify-between">
             <h1 className="text-3xl font-bold">Votes</h1>
             {currentPoll.creatorName && (
-              <span className="text-sm text-gray-400 pb-1">
-                Created by <span className="text-white font-medium">{currentPoll.creatorName}</span>
+              <span className="pb-1 text-sm text-muted-foreground">
+                Created by{" "}
+                <span className="font-medium text-foreground">
+                  {currentPoll.creatorName}
+                </span>
               </span>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xl">
-            <span className="text-gray-200">Who is more likely to</span>
-            <span className="bg-[#27272a] text-green-400 px-4 py-1 rounded-full font-medium">
+          <div className="flex flex-wrap items-center gap-3 text-xl">
+            <span className="text-muted-foreground">Who is more likely to</span>
+            <Badge
+              variant="secondary"
+              className="rounded-full px-4 py-1 text-base font-medium text-primary"
+            >
               {currentPoll.question}
-            </span>
+            </Badge>
           </div>
         </div>
 
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {currentPoll.options.map((option, index) => {
-            const percentage = totalVotes === 0 ? 0 : Math.round((option.votes / totalVotes) * 100);
-            const colors = [
-              "text-green-400",
-              "text-red-400",
-              "text-blue-400",
-              "text-yellow-400",
-              "text-purple-400",
-              "text-pink-400",
-              "text-orange-400",
-              "text-teal-400",
-              "text-cyan-400",
-              "text-indigo-400",
-              "text-rose-400",
-              "text-emerald-400"
-            ];
-            const colorClass = colors[index % colors.length];
-            
+            const percentage =
+              totalVotes === 0
+                ? 0
+                : Math.round((option.votes / totalVotes) * 100);
+            const accent = CHART_VARS[index % CHART_VARS.length];
+
             return (
-              <div 
+              <button
                 key={option.id}
                 onClick={() => handleVote(option.id)}
-                className="relative bg-[#27272a] rounded-2xl p-4 cursor-pointer hover:bg-[#3f3f46] transition-colors overflow-hidden"
+                className="relative overflow-hidden rounded-2xl bg-card p-4 text-left transition-[background-color,transform] hover:bg-accent active:scale-[0.99]"
               >
-                {/* Progress Bar Background */}
-                <div 
-                  className="absolute top-0 left-0 h-full bg-white/5 transition-all duration-500"
-                  style={{ width: `${percentage}%` }}
+                <div
+                  className="absolute top-0 left-0 h-full transition-[width] duration-500"
+                  style={{ width: `${percentage}%`, backgroundColor: accent, opacity: 0.16 }}
                 />
-                
-                <div className="relative flex justify-between items-center z-10">
-                  <span className="text-gray-300 font-medium">{option.text}</span>
-                  <span className={`font-bold ${colorClass}`}>{percentage}%</span>
+                <div className="relative z-10 flex items-center justify-between">
+                  <span className="font-medium text-card-foreground">
+                    {option.text}
+                  </span>
+                  <span className="font-bold" style={{ color: accent }}>
+                    <PopNumber value={percentage} suffix="%" />
+                  </span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
 
-        <div className="flex gap-4 pt-4">
-          <BouncyButton 
-            onClick={handleShareClick}
-            className="bg-[#27272a] text-gray-400 px-8 py-2.5 rounded-full font-medium text-sm hover:bg-[#3f3f46] transition-colors"
+        <div className="flex gap-4 pt-6">
+          <Button
+            variant="secondary"
+            onClick={() => setShowShareModal(true)}
+            className="rounded-full transition-transform active:scale-[0.96]"
           >
+            <Share2 data-icon="inline-start" />
             Share
-          </BouncyButton>
-          
-          {user && user.id === currentPoll.creatorId && (
-            <BouncyButton 
-              onClick={handleDeleteClick}
-              disabled={isDeleting}
-              className="bg-[#ff4b4b] text-white px-6 py-2.5 rounded-full font-medium text-sm hover:bg-[#ff3333] transition-colors ml-auto disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Delete Poll
-            </BouncyButton>
+          </Button>
+
+          {isOwner && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button
+                  variant="destructive"
+                  disabled={isDeleting}
+                  className="ml-auto rounded-full transition-transform active:scale-[0.96]"
+                >
+                  <Trash2 data-icon="inline-start" />
+                  Delete Poll
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Poll</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to delete this poll? This action
+                    cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={handleConfirmDelete}
+                    disabled={isDeleting}
+                    className="bg-destructive text-white hover:bg-destructive/90"
+                  >
+                    {isDeleting ? "Deleting..." : "Delete"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           )}
         </div>
-
       </div>
 
-      <Modal
-        isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
-        title="Delete Poll"
-      >
-        <div className="space-y-6">
-          <p>Are you sure you want to delete this poll? This action cannot be undone.</p>
-          <div className="flex justify-end gap-4">
-            <BouncyButton
-              onClick={() => setShowDeleteModal(false)}
-              className="px-4 py-2 rounded-full text-sm font-medium hover:bg-white/10 transition-colors"
-            >
-              Cancel
-            </BouncyButton>
-            <BouncyButton
-              onClick={handleConfirmDelete}
-              disabled={isDeleting}
-              className="bg-[#ff4b4b] text-white px-6 py-2 rounded-full text-sm font-medium hover:bg-[#ff3333] transition-colors disabled:opacity-50"
-            >
-              {isDeleting ? "Deleting..." : "Delete"}
-            </BouncyButton>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={showShareModal}
-        onClose={() => setShowShareModal(false)}
-        title="Share Poll"
-      >
-        <div className="space-y-6">
-          <p className="text-gray-300">Share this link with your friends to get their votes!</p>
-          <div className="flex items-center gap-2 bg-[#27272a] p-2 rounded-lg border border-gray-700">
-            <input 
-              readOnly 
-              value={shareUrl} 
-              className="bg-transparent text-gray-400 text-sm flex-1 outline-none px-2"
-            />
-            <BouncyButton
+      <Dialog open={showShareModal} onOpenChange={setShowShareModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Share Poll</DialogTitle>
+            <DialogDescription>
+              Share this link with your friends to get their votes!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center gap-2">
+            <Input readOnly value={shareUrl} className="flex-1" />
+            <Button
               onClick={handleCopyLink}
-              className="bg-white text-black px-4 py-1.5 rounded-md text-sm font-bold hover:bg-gray-200 transition-colors"
+              className="transition-transform active:scale-[0.96]"
             >
+              <Copy data-icon="inline-start" />
               Copy
-            </BouncyButton>
+            </Button>
           </div>
-        </div>
-      </Modal>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
